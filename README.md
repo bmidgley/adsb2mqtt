@@ -25,7 +25,7 @@ Configuration is done via environment variables:
 | Variable | Default | Description |
 |----------|---------|-------------|
 | `ADSB_URL` | `http://adsbexchange.local/tar1090/data/aircraft.json` | URL to fetch ADSB data from |
-| `MQTT_BROKER` | `evalink.archresearch.net` | MQTT broker hostname |
+| `MQTT_BROKER` | `localhost` | MQTT broker hostname |
 | `MQTT_PORT` | `8883` | MQTT broker port (TLS) |
 | `MQTT_USERNAME` | (empty) | MQTT username |
 | `MQTT_PASSWORD` | (empty) | MQTT password |

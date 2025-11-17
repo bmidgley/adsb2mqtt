@@ -27,7 +27,7 @@ class MQTTSubscriber:
         self.setup_logging()
         
         # Configuration from environment variables or defaults
-        self.mqtt_broker = os.getenv('MQTT_BROKER', 'evalink.archresearch.net')
+        self.mqtt_broker = os.getenv('MQTT_BROKER', 'localhost')
         self.mqtt_port = int(os.getenv('MQTT_PORT', '8883'))
         self.mqtt_username = os.getenv('MQTT_USERNAME', '')
         self.mqtt_password = os.getenv('MQTT_PASSWORD', '')
