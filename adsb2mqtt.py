@@ -10,6 +10,7 @@ import json
 import time
 import logging
 import signal
+import hashlib
 from typing import Optional, Dict, Any
 
 from dotenv import load_dotenv
@@ -43,6 +44,9 @@ class ADSB2MQTT:
         
         # MQTT client
         self.mqtt_client = None
+        
+        # Track checksums for each aircraft to avoid publishing unchanged data
+        self.aircraft_checksums: Dict[str, str] = {}
         
         # Setup signal handlers for graceful shutdown
         signal.signal(signal.SIGINT, self.signal_handler)
@@ -154,8 +158,12 @@ class ADSB2MQTT:
             self.logger.error(f"Unexpected error fetching ADSB data: {e}")
             return None
     
+    def calculate_checksum(self, payload: str) -> str:
+        """Calculate SHA256 checksum of the payload."""
+        return hashlib.sha256(payload.encode('utf-8')).hexdigest()
+    
     def publish_to_mqtt(self, aircraft: Dict[str, Any], topic: Optional[str] = None) -> bool:
-        """Publish individual aircraft data to MQTT broker."""
+        """Publish individual aircraft data to MQTT broker if data has changed."""
         if not self.mqtt_client or not self.mqtt_client.is_connected():
             self.logger.error("MQTT client not connected")
             return False
@@ -168,6 +176,19 @@ class ADSB2MQTT:
                 topic = f"{self.mqtt_topic}/{aircraft_id}"
             
             payload = json.dumps(aircraft, separators=(',', ':'))
+            
+            # Calculate checksum of current payload
+            current_checksum = self.calculate_checksum(payload)
+            
+            # Check if we have a stored checksum for this aircraft
+            stored_checksum = self.aircraft_checksums.get(aircraft_id)
+            
+            # Only publish if checksum has changed or this is the first time we see this aircraft
+            if stored_checksum == current_checksum:
+                self.logger.debug(f"Skipping publish for {aircraft_id} - data unchanged")
+                return False
+            
+            # Publish the message
             result = self.mqtt_client.publish(
                 topic,
                 payload,
@@ -176,7 +197,15 @@ class ADSB2MQTT:
             )
             
             if result.rc == mqtt.MQTT_ERR_SUCCESS:
-                self.logger.debug(f"Published aircraft to {topic}")
+                # Update stored checksum after successful publish
+                self.aircraft_checksums[aircraft_id] = current_checksum
+                
+                # Reset cache if it grows too large to prevent memory issues
+                if len(self.aircraft_checksums) > 2000:
+                    self.logger.info(f"Checksum cache exceeded 2000 entries, resetting cache")
+                    self.aircraft_checksums = {}
+                
+                self.logger.debug(f"Published aircraft to {topic} (checksum updated)")
                 return True
             else:
                 self.logger.error(f"Failed to publish to MQTT, return code: {result.rc}")
