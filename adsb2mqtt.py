@@ -11,7 +11,6 @@ import time
 import logging
 import signal
 from typing import Optional, Dict, Any
-from urllib.parse import urlparse
 
 from dotenv import load_dotenv
 import requests
@@ -155,23 +154,29 @@ class ADSB2MQTT:
             self.logger.error(f"Unexpected error fetching ADSB data: {e}")
             return None
     
-    def publish_to_mqtt(self, data: Dict[str, Any]) -> bool:
-        """Publish aircraft data to MQTT broker."""
+    def publish_to_mqtt(self, aircraft: Dict[str, Any], topic: Optional[str] = None) -> bool:
+        """Publish individual aircraft data to MQTT broker."""
         if not self.mqtt_client or not self.mqtt_client.is_connected():
             self.logger.error("MQTT client not connected")
             return False
         
         try:
-            payload = json.dumps(data, separators=(',', ':'))
+            # Use provided topic or construct from aircraft identifier
+            if topic is None:
+                # Try to use hex code (ICAO identifier) or flight number as identifier
+                aircraft_id = aircraft.get('hex') or aircraft.get('flight', 'unknown')
+                topic = f"{self.mqtt_topic}/{aircraft_id}"
+            
+            payload = json.dumps(aircraft, separators=(',', ':'))
             result = self.mqtt_client.publish(
-                self.mqtt_topic,
+                topic,
                 payload,
                 qos=1,
                 retain=False
             )
             
             if result.rc == mqtt.MQTT_ERR_SUCCESS:
-                self.logger.debug(f"Published to {self.mqtt_topic}")
+                self.logger.debug(f"Published aircraft to {topic}")
                 return True
             else:
                 self.logger.error(f"Failed to publish to MQTT, return code: {result.rc}")
@@ -201,9 +206,15 @@ class ADSB2MQTT:
                 # Fetch ADSB data
                 data = self.fetch_adsb_data()
                 
-                if data:
-                    # Publish to MQTT
-                    self.publish_to_mqtt(data)
+                if data and 'aircraft' in data:
+                    # Publish each aircraft entry as a separate MQTT message
+                    aircraft_list = data.get('aircraft', [])
+                    published_count = 0
+                    for aircraft in aircraft_list:
+                        if self.publish_to_mqtt(aircraft):
+                            published_count += 1
+                    
+                    self.logger.debug(f"Published {published_count} aircraft entries")
                 else:
                     self.logger.warning("No data to publish")
                 
