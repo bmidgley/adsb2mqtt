@@ -72,24 +72,44 @@ The application will automatically load environment variables from the `.env` fi
 
 ## MQTT Message Format
 
-The application publishes JSON messages to the configured MQTT topic. The message format matches the ADSB Exchange API response:
+The application publishes individual aircraft data as separate JSON messages. Each aircraft is published to its own topic based on its identifier.
+
+### Topic Format
+
+Messages are published to topics in the format: `{MQTT_TOPIC}/{aircraft_id}`
+
+- `{MQTT_TOPIC}` is the base topic configured via the `MQTT_TOPIC` environment variable (default: `adsb/aircraft`)
+- `{aircraft_id}` is the aircraft's hex code (ICAO identifier) or flight number
+
+**Examples:**
+- `adsb/aircraft/abc123` - Aircraft with hex code "abc123"
+- `adsb/aircraft/ABC123` - Aircraft with flight number "ABC123"
+
+To subscribe to all aircraft messages, use a wildcard: `adsb/aircraft/+`
+
+### Message Format
+
+Each message contains a single aircraft object as JSON:
 
 ```json
 {
-  "now": 1234567890.123,
-  "messages": 12345,
-  "aircraft": [
-    {
-      "hex": "abc123",
-      "flight": "ABC123",
-      "lat": 37.7749,
-      "lon": -122.4194,
-      "altitude": 35000,
-      ...
-    }
-  ]
+  "hex": "abc123",
+  "flight": "ABC123",
+  "lat": 37.7749,
+  "lon": -122.4194,
+  "altitude": 35000,
+  "track": 180,
+  "speed": 450,
+  "vert_rate": 0,
+  "squawk": "1234",
+  "rssi": -45.2,
+  "messages": 1234,
+  "seen": 5.2,
+  "seen_pos": 2.1
 }
 ```
+
+**Note:** Messages are only published when the aircraft data has changed (using checksum comparison), reducing unnecessary MQTT traffic.
 
 ## Requirements
 
